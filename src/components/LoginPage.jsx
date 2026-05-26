@@ -172,7 +172,7 @@ export const LoginPage = () => {
               ) : (
                 <>
                   <span>Sign In as {role.charAt(0).toUpperCase() + role.slice(1)}</span>
-                  <ArrowRight size={18} />
+                  <ArrowRight size={28} />
                 </>
               )}
             </button>
