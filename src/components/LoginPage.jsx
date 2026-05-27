@@ -19,7 +19,28 @@ export const LoginPage = () => {
   // Sync body class with selected role and theme
   useEffect(() => {
     document.body.className = `role-${role}${isDark ? '' : ' light-mode'}`;
-  }, [role, isDark]);
+  }, [role, isDark
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ]);
 
   const handleRoleSelect = (selectedRole) => {
     setRole(selectedRole);
