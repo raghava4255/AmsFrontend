@@ -4,6 +4,7 @@ import { Search, Download } from 'lucide-react';
 
 export const AdminAttendance = () => {
   const [logs, setLogs] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -25,8 +26,21 @@ export const AdminAttendance = () => {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/departments`);
+      if (res.ok) {
+        const data = await res.json();
+        setDepartments(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchHistory();
+    fetchDepartments();
   }, []);
 
   const filteredLogs = logs.filter(log => {
@@ -78,10 +92,9 @@ export const AdminAttendance = () => {
         </div>
         <select value={filterDept} onChange={e => setFilterDept(e.target.value)} className="glass-input" style={{ width: '200px', padding: '10px', background: 'var(--bg-panel)', color: 'var(--text-primary)' }}>
           <option style={{color:'black'}} value="">All Departments</option>
-          <option style={{color:'black'}} value="Engineering">Engineering</option>
-          <option style={{color:'black'}} value="Marketing">Marketing</option>
-          <option style={{color:'black'}} value="Sales">Sales</option>
-          <option style={{color:'black'}} value="HR & Administration">HR & Admin</option>
+          {departments.map(dept => (
+            <option key={dept.id} style={{color:'black'}} value={dept.name}>{dept.name}</option>
+          ))}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="glass-input" style={{ width: '200px', padding: '10px', background: 'var(--bg-panel)', color: 'var(--text-primary)' }}>
           <option style={{color:'black'}} value="">All Statuses</option>
