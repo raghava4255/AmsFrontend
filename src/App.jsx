@@ -47,7 +47,7 @@ const styles = {
     animation: 'spin 1s linear infinite',
   },
   loadingText: {
-    fontFamily: "'Outfit', sans-serif",
+    fontFamily: "'Lucida Fax', serif",
     color: '#94a3b8',
     fontSize: '1rem',
     fontWeight: '500',

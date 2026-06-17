@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, Eye, EyeOff, Shield, Briefcase, Users, AlertCircle, ArrowRight, Sun, Moon } from 'lucide-react';
-// import Logo from './Logo';
-import companylogo from "../assets/company.png"
+import { 
+  Mail, Lock, Eye, EyeOff, Shield, Briefcase, Users, 
+  AlertCircle, Fingerprint, Calendar, 
+  FileText, ShieldCheck, ChevronDown 
+} from 'lucide-react';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
+import loginIllustration from "../assets/login_illustration.png";
+import companyLogo from "../assets/company.png";
 
 export const LoginPage = () => {
   const { login } = useAuth();
@@ -13,40 +18,18 @@ export const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [shake, setShake] = useState(false);
+
   // Sync body class with selected role and theme
   useEffect(() => {
     document.body.className = `role-${role} light-mode`;
-  }, [role
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  ]);
+  }, [role]);
 
   const handleRoleSelect = (selectedRole) => {
     setRole(selectedRole);
     setError(null);
-    // No autofill — user must type their own credentials
   };
-
-
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -63,7 +46,7 @@ export const LoginPage = () => {
     const result = await login(email, password, role);
 
     if (!result.success) {
-      setError(result.error);
+      setError(result.error || "Authentication failed. Please try again.");
       triggerShake();
     }
 
@@ -77,121 +60,231 @@ export const LoginPage = () => {
 
   return (
     <div style={styles.container}>
-      {/* Ambient blobs */}
-      <div style={styles.blob1} />
-      <div style={styles.blob2} />
+      <style>{`
+        @media (max-width: 960px) {
+          .login-card-wrapper {
+            width: 100% !important;
+            max-width: 460px !important;
+            height: auto !important;
+            min-height: auto !important;
+            border-radius: 16px !important;
+            margin: 16px !important;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.08) !important;
+          }
+          .login-left-panel {
+            display: none !important;
+          }
+          .login-right-panel {
+            flex: 1 !important;
+            padding: 36px 24px !important;
+          }
+        }
+        .login-input:focus {
+          border-color: #0b4fbf !important;
+          box-shadow: 0 0 0 3px rgba(11, 79, 191, 0.1) !important;
+          outline: none;
+        }
+        .login-button-primary:hover {
+          background-color: #032b80 !important;
+          box-shadow: 0 4px 12px rgba(11, 79, 191, 0.2) !important;
+        }
+        .login-role-select:focus {
+          border-color: #0b4fbf !important;
+          box-shadow: 0 0 0 3px rgba(11, 79, 191, 0.1) !important;
+          outline: none;
+        }
+        .login-role-select:hover {
+          border-color: #94a3b8 !important;
+        }
+      `}</style>
 
+      {/* Floating Centered Card Wrapper */}
+      <div className="login-card-wrapper" style={styles.cardWrapper}>
+        
+        {/* LEFT COLUMN: BRANDING & ILLUSTRATION */}
+        <div className="login-left-panel" style={styles.leftPanel}>
+          {/* Top Header Logo */}
+          <div style={styles.leftHeader}>
+            <div style={styles.logoBadge}>
+              <Users size={28} color="#ffffff" />
+              <div style={styles.logoBadgeClock}>
+                <Calendar size={10} color="#0b4fbf" />
+              </div>
+            </div>
+            <div style={styles.leftHeaderText}>
+              <h1 style={styles.leftTitle}>AMS</h1>
+              <p style={styles.leftSubtitle}>Attendance Management System</p>
+            </div>
+          </div>
 
+          {/* Central Mock Illustration */}
+          <div style={styles.illustrationContainer}>
+            <img 
+              src={loginIllustration} 
+              alt="AMS Dashboard illustration" 
+              style={styles.illustration} 
+            />
+          </div>
 
-      <div style={styles.cardWrapper} className={shake ? 'animate-shake' : ''}>
-        {/* Logo Header */}
-        <div style={styles.header}>
-          {/* <Logo size={46} variant="full" light={true} /> */}
-          <img src={companylogo} style={styles.logo} alt="logo" />
-
-          <p style={styles.subtitle}>Employee Attendance Management</p>
+          {/* Bottom Feature Badges */}
+          <div style={styles.featureGrid}>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIconContainer}>
+                <Fingerprint size={18} color="#ffffff" />
+              </div>
+              <span style={styles.featureText}>Mark Attendance</span>
+            </div>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIconContainer}>
+                <Calendar size={18} color="#ffffff" />
+              </div>
+              <span style={styles.featureText}>Manage Leaves</span>
+            </div>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIconContainer}>
+                <FileText size={18} color="#ffffff" />
+              </div>
+              <span style={styles.featureText}>View Reports</span>
+            </div>
+            <div style={styles.featureItem}>
+              <div style={styles.featureIconContainer}>
+                <ShieldCheck size={18} color="#ffffff" />
+              </div>
+              <span style={styles.featureText}>Secure &amp; Reliable</span>
+            </div>
+          </div>
         </div>
 
-        {/* Form Panel */}
-        <div className="glass-panel" style={styles.cardBody}>
-          <form onSubmit={handleSubmit} style={styles.form} autoComplete="off">
+        {/* RIGHT COLUMN: LOGIN FORM */}
+        <div className="login-right-panel" style={styles.rightPanel}>
+          
+          {/* Main form card content wrapper */}
+          <div style={{ ...styles.formContainer, ...(shake ? styles.shakeAnimation : {}) }}>
+            
+            <div style={styles.formHeader}>
+              <img src={companyLogo} alt="Company Logo" style={styles.companyLogo} />
+            </div>
 
-            {/* Role Selector Tabs */}
-            <div style={styles.roleSelectorLabel}>Select Access Role</div>
-            <div style={styles.tabContainer}>
-              {[
-                { id: 'employee', label: 'Employee', Icon: Briefcase },
-                { id: 'manager', label: 'Manager', Icon: Users },
-                { id: 'admin', label: 'HR / Admin', Icon: Shield },
-              ].map(({ id, label, Icon }) => (
+            <form onSubmit={handleSubmit} style={styles.form} autoComplete="off">
+              {/* Role selector dropdown */}
+              <div style={styles.inputGroup}>
+                <label style={styles.roleLabel}>Access Role</label>
+                <div style={styles.inputWrapper}>
+                  <Shield size={16} style={styles.inputIcon} />
+                  <select
+                    id="login-role"
+                    className="login-role-select"
+                    style={styles.roleSelect}
+                    value={role}
+                    onChange={e => handleRoleSelect(e.target.value)}
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="manager">Team Lead</option>
+                    <option value="admin">HR / Admin</option>
+                  </select>
+                  <ChevronDown size={16} style={styles.selectChevron} />
+                </div>
+              </div>
+
+              {/* Email/Username Input */}
+              <div style={styles.inputGroup}>
+                <div style={styles.inputWrapper}>
+                  <Mail size={16} style={styles.inputIcon} />
+                  <input
+                    id="login-email"
+                    type="text"
+                    className="login-input"
+                    style={styles.input}
+                    placeholder="Username or Corporate Email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div style={styles.inputGroup}>
+                <div style={styles.inputWrapper}>
+                  <Lock size={16} style={styles.inputIcon} />
+                  <input
+                    id="login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    className="login-input"
+                    style={styles.input}
+                    placeholder="Password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={styles.eyeBtn}
+                    id="toggle-password-visibility"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember & Forgot Row */}
+              <div style={styles.formRow}>
+                <label style={styles.rememberLabel}>
+                  <input type="checkbox" style={styles.checkbox} />
+                  <span>Remember me</span>
+                </label>
                 <button
-                  key={id}
                   type="button"
-                  id={`role-tab-${id}`}
-                  style={{
-                    ...styles.tabBtn,
-                    ...(role === id ? styles.tabBtnActive : {}),
-                  }}
-                  onClick={() => handleRoleSelect(id)}
+                  id="forgot-password-link"
+                  onClick={() => setShowForgotPassword(true)}
+                  style={styles.forgotBtn}
                 >
-                  <Icon size={16} />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Email */}
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Corporate Email</label>
-              <div style={styles.inputWrapper}>
-                <Mail size={18} style={styles.inputIcon} />
-                <input
-                  id="login-email"
-                  type="email"
-                  className="glass-input"
-                  placeholder="name@company.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div style={styles.inputGroup}>
-              <div style={styles.passwordHeader}>
-                <label style={styles.label}>Password</label>
-              </div>
-              <div style={styles.inputWrapper}>
-                <Lock size={18} style={styles.inputIcon} />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  className="glass-input"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={styles.eyeBtn}
-                  id="toggle-password-visibility"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  Forgot Password?
                 </button>
               </div>
-            </div>
 
-            {/* Error */}
-            {error && (
-              <div style={styles.errorContainer}>
-                <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {/* Submit */}
-            <button
-              type="submit"
-              id="login-submit"
-              disabled={isSubmitting}
-              className="btn-primary"
-              style={{ ...styles.submitBtn, opacity: isSubmitting ? 0.8 : 1 }}
-            >
-              {isSubmitting ? (
-                <div style={styles.spinner} />
-              ) : (
-                <>
-                  <span>Sign In as {role.charAt(0).toUpperCase() + role.slice(1)}</span>
-                  <ArrowRight size={28} />
-                </>
+              {/* Error display */}
+              {error && (
+                <div style={styles.errorContainer}>
+                  <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                  <span>{error}</span>
+                </div>
               )}
-            </button>
-          </form>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                id="login-submit"
+                disabled={isSubmitting}
+                className="login-button-primary"
+                style={styles.submitBtn}
+              >
+                {isSubmitting ? (
+                  <div style={styles.spinner} />
+                ) : (
+                  <>
+                    <span>Login</span>
+                  </>
+                )}
+              </button>
+
+            </form>
+          </div>
+
+          {/* Footer */}
+          <div style={styles.footer}>
+            <span>© 2026 AMS. All rights reserved.</span>
+            <div style={styles.footerLinks}>
+              <span style={styles.footerLink}>Privacy Policy</span>
+              <span style={{ color: '#cbd5e1' }}>|</span>
+              <span style={styles.footerLink}>Terms &amp; Conditions</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {showForgotPassword && <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />}
     </div>
   );
 };
@@ -203,99 +296,356 @@ const styles = {
     justifyContent: 'center',
     minHeight: '100vh',
     width: '100vw',
+    backgroundColor: '#f1f5f9',
+    color: '#0f172a',
+    fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     padding: '24px',
+  },
+  cardWrapper: {
+    display: 'flex',
+    width: '960px',
+    height: '600px',
+    borderRadius: '20px',
+    overflow: 'hidden',
+    boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04)',
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+  },
+  leftPanel: {
+    flex: 1,
+    background: 'linear-gradient(135deg, #0b4fbf 0%, #032b80 100%)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    padding: '40px',
+    color: '#ffffff',
     position: 'relative',
     overflow: 'hidden',
   },
-  blob1: {
-    position: 'absolute', top: '10%', left: '5%',
-    width: '320px', height: '320px', borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)',
-    filter: 'blur(50px)', zIndex: 0, pointerEvents: 'none',
+  leftHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    zIndex: 2,
   },
-  blob2: {
-    position: 'absolute', bottom: '10%', right: '5%',
-    width: '420px', height: '420px', borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)',
-    filter: 'blur(60px)', zIndex: 0, pointerEvents: 'none',
+  logoBadge: {
+    width: '46px',
+    height: '46px',
+    borderRadius: '12px',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  themeBtn: {
-    position: 'absolute', top: '20px', right: '24px', zIndex: 100,
+  logoBadgeClock: {
+    position: 'absolute',
+    bottom: '-3px',
+    right: '-3px',
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    backgroundColor: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
   },
-  cardWrapper: {
-    width: '100%', maxWidth: '460px',
-    display: 'flex', flexDirection: 'column',
-    gap: '15px', zIndex: 10,
+  leftHeaderText: {
+    display: 'flex',
+    flexDirection: 'column',
   },
-  header: {
-    display: 'flex', flexDirection: 'column',
-    alignItems: 'center', gap: '0px',
+  leftTitle: {
+    fontSize: '1.75rem',
+    fontWeight: '800',
+    lineHeight: '1',
+    letterSpacing: '-0.02em',
+    margin: 0,
   },
-  logo: {
+  leftSubtitle: {
+    fontSize: '0.8rem',
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: '500',
+    margin: '2px 0 0 0',
+  },
+  illustrationContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flex: 1,
+    padding: '16px 0',
+    zIndex: 2,
+  },
+  illustration: {
+    width: '320px',
+    height: '240px',
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 15px 25px rgba(0,0,0,0.2))',
+  },
+  featureGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '8px',
+    zIndex: 2,
+    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+    paddingTop: '20px',
+  },
+  featureItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '6px',
+  },
+  featureIconContainer: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureText: {
+    fontSize: '0.7rem',
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  rightPanel: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    padding: '40px 48px',
+    position: 'relative',
+  },
+  langSelector: {
+    alignSelf: 'flex-end',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+    cursor: 'pointer',
+    backgroundColor: '#ffffff',
+    userSelect: 'none',
+  },
+  formContainer: {
     width: '100%',
-    maxWidth: '250px',
-    height: 'auto',
+    margin: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+  },
+  formHeader: {
+    textAlign: 'center',
+  },
+  companyLogo: {
+    maxWidth: '320px',
+    maxHeight: '120px',
     objectFit: 'contain',
   },
-  subtitle: {
-    color: 'var(--text-secondary)',
-    fontSize: '0.92rem', fontWeight: '400',
-    letterSpacing: '0.02em', textAlign: 'center',
+  formTitle: {
+    fontSize: '1.65rem',
+    fontWeight: '800',
+    color: '#0f172a',
+    margin: 0,
+    letterSpacing: '-0.02em',
   },
-  cardBody: { padding: '36px 32px' },
-  form: { display: 'flex', flexDirection: 'column', gap: '22px' },
-  roleSelectorLabel: {
-    fontSize: '0.82rem', fontWeight: '600',
-    color: 'var(--text-muted)',
-    textTransform: 'uppercase', letterSpacing: '0.06em',
-    marginBottom: '-10px',
+  formSubtitle: {
+    fontSize: '0.88rem',
+    color: '#64748b',
+    margin: '6px 0 0 0',
+    fontWeight: '500',
   },
-  tabContainer: {
+  form: {
     display: 'flex',
-    background: 'rgba(0,0,0,0.20)',
-    padding: '4px', borderRadius: '14px',
-    border: '1px solid var(--bg-card-border)',
-    gap: '4px',
+    flexDirection: 'column',
+    gap: '14px',
   },
-  tabBtn: {
-    flex: 1, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', gap: '6px',
-    padding: '10px 4px', borderRadius: '10px',
-    border: 'none', background: 'transparent',
-    color: 'var(--text-muted)',
-    fontFamily: 'var(--font-display)', fontWeight: '500',
-    fontSize: '0.83rem', cursor: 'pointer',
-    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+  roleLabel: {
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: '4px',
+    display: 'block',
   },
-  tabBtnActive: {
-    background: 'rgba(255,255,255,0.08)',
-    color: 'var(--text-primary)',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    border: '1px solid rgba(255,255,255,0.06)',
+  roleSelect: {
+    width: '100%',
+    padding: '12px 40px 12px 40px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.9rem',
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
+    transition: 'all 0.2s ease',
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    cursor: 'pointer',
+    fontWeight: '600',
   },
-  inputGroup: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  label: { fontSize: '0.85rem', fontWeight: '500', color: 'var(--text-secondary)' },
-  passwordHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  inputWrapper: { position: 'relative', display: 'flex', alignItems: 'center' },
-  inputIcon: { position: 'absolute', left: '16px', color: 'var(--text-muted)', pointerEvents: 'none' },
+  selectChevron: {
+    position: 'absolute',
+    right: '14px',
+    color: '#94a3b8',
+    pointerEvents: 'none',
+  },
+  inputGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  inputWrapper: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  inputIcon: {
+    position: 'absolute',
+    left: '14px',
+    color: '#94a3b8',
+    pointerEvents: 'none',
+  },
+  input: {
+    width: '100%',
+    padding: '12px 14px 12px 40px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    fontSize: '0.9rem',
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
+    transition: 'all 0.2s ease',
+  },
   eyeBtn: {
-    position: 'absolute', right: '16px',
-    background: 'transparent', border: 'none',
-    color: 'var(--text-muted)', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+    position: 'absolute',
+    right: '14px',
+    background: 'transparent',
+    border: 'none',
+    color: '#94a3b8',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+  },
+  formRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: '0.8rem',
+  },
+  rememberLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    color: '#475569',
+    fontWeight: '500',
+    cursor: 'pointer',
+  },
+  checkbox: {
+    width: '14px',
+    height: '14px',
+    borderRadius: '3px',
+    border: '1px solid #cbd5e1',
+    cursor: 'pointer',
+  },
+  forgotBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: '#0b4fbf',
+    fontWeight: '600',
+    cursor: 'pointer',
+    padding: 0,
   },
   errorContainer: {
-    display: 'flex', alignItems: 'center', gap: '10px',
-    background: 'rgba(239,68,68,0.10)',
-    border: '1px solid rgba(239,68,68,0.20)',
-    padding: '12px 16px', borderRadius: '12px',
-    color: '#fca5a5', fontSize: '0.88rem', lineHeight: '1.4',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    backgroundColor: '#fef2f2',
+    border: '1px solid #fecaca',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    color: '#991b1b',
+    fontSize: '0.8rem',
+    lineHeight: '1.4',
   },
-  submitBtn: { marginTop: '6px' },
+  submitBtn: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '8px',
+    border: 'none',
+    backgroundColor: '#0b4fbf',
+    color: '#ffffff',
+    fontSize: '0.95rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  separator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    margin: '2px 0',
+  },
+  line: {
+    flex: 1,
+    height: '1px',
+    backgroundColor: '#f1f5f9',
+  },
+  separatorText: {
+    fontSize: '0.75rem',
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  ssoBtn: {
+    width: '100%',
+    padding: '10px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
+    backgroundColor: '#ffffff',
+    color: '#334155',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    transition: 'all 0.2s ease',
+  },
   spinner: {
-    width: '20px', height: '20px', borderRadius: '50%',
-    border: '3px solid rgba(255,255,255,0.3)',
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    border: '2.5px solid rgba(255,255,255,0.3)',
     borderTopColor: '#ffffff',
     animation: 'spin 0.8s linear infinite',
+    margin: 'auto',
+  },
+  footer: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: '0.7rem',
+    color: '#64748b',
+    borderTop: '1px solid #f1f5f9',
+    paddingTop: '16px',
+  },
+  footerLinks: {
+    display: 'flex',
+    gap: '6px',
+  },
+  footerLink: {
+    cursor: 'pointer',
+    fontWeight: '500',
+  },
+  shakeAnimation: {
+    animation: 'shake 0.4s ease',
   },
 };
+

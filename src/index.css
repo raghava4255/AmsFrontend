@@ -2,7 +2,8 @@
    QualitySoft — Premium Global Design System
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap');
+
+/* Lucida Fax is a system font — no external import needed */
 
 /* ── Root tokens (Dark Mode — default) ── */
 :root {
@@ -91,12 +92,18 @@ body.light-mode ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); }
 /* ── Reset ── */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+html { width: 100%; height: 100%; margin: 0; padding: 0; overscroll-behavior: none; }
+#root { width: 100%; min-height: 100vh; display: flex; flex-direction: column; }
 body {
   font-family: var(--font-body);
   background-color: var(--bg-dark);
   color: var(--text-primary);
   min-height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
+  overscroll-behavior: none;
   position: relative;
   background-image: var(--mesh-gradient);
   background-size: cover;
@@ -178,6 +185,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass-input::placeholder { color: var(--text-muted); }
+
+/* Hide default browser password reveal to prevent double eye icon */
+.glass-input::-ms-reveal,
+.glass-input::-ms-clear {
+  display: none;
+}
 
 /* ── Animations ── */
 @keyframes float-slow {
@@ -273,3 +286,15 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* React DatePicker overrides */
+.react-datepicker-popper { z-index: 99999 !important; }
+.react-datepicker { font-family: inherit; }
+
+
+/* Sidebar Buttons */
+.sidebar-btn { background: transparent !important; transition: all 0.2s ease; outline: none !important; }
+.sidebar-btn:hover { background: rgba(0,0,0,0.04) !important; }
+.sidebar-btn.active { background: #0f172a !important; color: #ffffff !important; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12) !important; }
+.sidebar-btn.active svg { stroke: #ffffff !important; }
+
