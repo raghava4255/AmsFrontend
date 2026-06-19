@@ -1,6 +1,5 @@
 // Centralized backend configuration for the C# .NET Web API
-// HTTPS is the default, but if you run into local SSL trust certificate issues,
-// you can toggle to the HTTP port (5073) instead.
+// This dynamically checks the environment variable VITE_API_BASE_URL at build time
+// or falls back to a relative path '/api' for easy Docker proxy configuration.
 
-// export const API_BASE_URL = 'https://localhost:7151/api';
-export const API_BASE_URL = 'http://localhost:5073/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
