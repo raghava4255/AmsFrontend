@@ -9,7 +9,7 @@ import {
   LogOut, Calendar, Clock, Award, Check, X, AlertCircle, Plus,
   Users, UserCheck, ShieldAlert, BarChart3, UserPlus, MapPin,
   Sun, Moon, FileText, CheckCircle, XCircle, Hourglass, Mail,
-  LayoutDashboard, Layers, Settings, HelpCircle, Bell, Menu, Info, Trash2
+  LayoutDashboard, Layers, Settings, HelpCircle, Bell, Menu, Info, Trash2, Eye, EyeOff
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import companylogo from "../assets/company logo.png"
@@ -594,6 +594,7 @@ export const Dashboard = () => {
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeEmail, setNewEmployeeEmail] = useState('');
   const [newEmployeePass, setNewEmployeePass] = useState('');
+  const [showAddEmployeePassword, setShowAddEmployeePassword] = useState(false);
   const [newEmployeeDept, setNewEmployeeDept] = useState('');
   const [newEmployeeRole, setNewEmployeeRole] = useState(['employee']);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
@@ -645,6 +646,9 @@ export const Dashboard = () => {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   /* ── Shift Change Request ── */
   const [showShiftRequestModal, setShowShiftRequestModal] = useState(false);
@@ -2174,7 +2178,27 @@ export const Dashboard = () => {
                 ].map(({ label, type, ph, val, set }) => (
                   <div key={label} style={styles.modalInputGroup}>
                     <label style={styles.modalLabel}>{label}</label>
-                    <input type={type} placeholder={ph} value={val} onChange={e => set(e.target.value)} style={styles.modalInput} autoComplete="off" />
+                    {label === 'Set Password' ? (
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <input
+                          type={showAddEmployeePassword ? 'text' : 'password'}
+                          placeholder={ph}
+                          value={val}
+                          onChange={e => set(e.target.value)}
+                          style={{ ...styles.modalInput, paddingRight: '40px' }}
+                          autoComplete="off"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAddEmployeePassword(!showAddEmployeePassword)}
+                          style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                        >
+                          {showAddEmployeePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    ) : (
+                      <input type={type} placeholder={ph} value={val} onChange={e => set(e.target.value)} style={styles.modalInput} autoComplete="off" />
+                    )}
                   </div>
                 ))}
 
@@ -3218,23 +3242,41 @@ export const Dashboard = () => {
               <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Current Password (required to change password)</label>
-                <input
-                  type="password"
-                  placeholder="Enter current password"
-                  value={oldPassword}
-                  onChange={e => setOldPassword(e.target.value)}
-                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showOldPassword ? 'text' : 'password'}
+                    placeholder="Enter current password"
+                    value={oldPassword}
+                    onChange={e => setOldPassword(e.target.value)}
+                    style={{ padding: '11px 40px 11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOldPassword(!showOldPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>New Password</label>
-                <input
-                  type="password"
-                  placeholder={policy ? `Min length: ${policy.minLength}` : "At least 8 characters, uppercase, digit & symbol"}
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder={policy ? `Min length: ${policy.minLength}` : "At least 8 characters, uppercase, digit & symbol"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    style={{ padding: '11px 40px 11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               {policy && newPassword && (
                 <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc' }}>
@@ -3244,12 +3286,21 @@ export const Dashboard = () => {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    style={{ padding: '11px 40px 11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <button type="submit" className="btn-primary" style={{ marginTop: '10px' }}>Save Profile Changes</button>
             </form>
@@ -3493,26 +3544,44 @@ export const Dashboard = () => {
             <form onSubmit={handleFirstTimeChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Temporary Password</label>
-                <input
-                  type="password"
-                  placeholder="Enter temporary password"
-                  value={oldPassword}
-                  onChange={e => setOldPassword(e.target.value)}
-                  required
-                  style={{ padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showOldPassword ? 'text' : 'password'}
+                    placeholder="Enter temporary password"
+                    value={oldPassword}
+                    onChange={e => setOldPassword(e.target.value)}
+                    required
+                    style={{ padding: '12px 40px 12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOldPassword(!showOldPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>New Secure Password</label>
-                <input
-                  type="password"
-                  placeholder="Create new password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  required
-                  style={{ padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder="Create new password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    required
+                    style={{ padding: '12px 40px 12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               {/* Real-time Password Criteria Feedback */}
@@ -3525,14 +3594,23 @@ export const Dashboard = () => {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confirm New Password</label>
-                <input
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  required
-                  style={{ padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    required
+                    style={{ padding: '12px 40px 12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               <button
@@ -4038,31 +4116,58 @@ export const Dashboard = () => {
               <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '15px 0' }} />
               <div style={styles.modalInputGroup}>
                 <label style={styles.modalLabel}>Old Password (to change password)</label>
-                <input
-                  type="password"
-                  placeholder="Leave blank to keep current"
-                  value={oldPassword}
-                  onChange={e => setOldPassword(e.target.value)}
-                  style={styles.modalInput}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showOldPassword ? 'text' : 'password'}
+                    placeholder="Leave blank to keep current"
+                    value={oldPassword}
+                    onChange={e => setOldPassword(e.target.value)}
+                    style={{ ...styles.modalInput, paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOldPassword(!showOldPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <div style={styles.modalInputGroup}>
                 <label style={styles.modalLabel}>New Password</label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  style={styles.modalInput}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    style={{ ...styles.modalInput, paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <div style={styles.modalInputGroup}>
                 <label style={styles.modalLabel}>Confirm New Password</label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  style={styles.modalInput}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    style={{ ...styles.modalInput, paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{ position: 'absolute', right: '14px', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                  >
+                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
               <button type="submit" className="btn-primary" style={{ marginTop: '10px' }}>
                 Save Changes

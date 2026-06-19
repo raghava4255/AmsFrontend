@@ -30,10 +30,10 @@ export const ReportingManagerDashboard = () => {
   const handleExport = () => {
     // Basic CSV export
     if (data.length === 0) return;
-    const headers = ['Employee ID', 'Name', 'Department', 'Punch In', 'Punch Out', 'Status'];
+    const headers = ['Employee ID', 'Name', 'Department', 'Shift', 'Punch In', 'Punch Out', 'Status'];
     const csvContent = [
       headers.join(','),
-      ...data.map(r => `"${r.employeeId}","${r.name}","${r.department}","${r.punchIn}","${r.punchOut}","${r.status}"`)
+      ...data.map(r => `"${r.employeeId}","${r.name}","${r.department}","${r.shift || '---'}","${r.punchIn}","${r.punchOut}","${r.status}"`)
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -146,6 +146,7 @@ export const ReportingManagerDashboard = () => {
                 <th style={{ padding: '16px', fontWeight: 600 }}>Employee ID</th>
                 <th style={{ padding: '16px', fontWeight: 600 }}>Name</th>
                 <th style={{ padding: '16px', fontWeight: 600 }}>Department</th>
+                <th style={{ padding: '16px', fontWeight: 600 }}>Shift</th>
                 <th style={{ padding: '16px', fontWeight: 600 }}>Punch In</th>
                 <th style={{ padding: '16px', fontWeight: 600 }}>Punch Out</th>
                 <th style={{ padding: '16px', fontWeight: 600 }}>Status</th>
@@ -154,13 +155,13 @@ export const ReportingManagerDashboard = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     Loading data...
                   </td>
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No records found for the selected date.
                   </td>
                 </tr>
@@ -177,6 +178,7 @@ export const ReportingManagerDashboard = () => {
                     <td style={{ padding: '16px', color: 'var(--text-primary)', fontWeight: 600 }}>{row.employeeId}</td>
                     <td style={{ padding: '16px', color: 'var(--text-primary)', fontWeight: 500 }}>{row.name}</td>
                     <td style={{ padding: '16px', color: 'var(--text-secondary)' }}>{row.department}</td>
+                    <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{row.shift || '---'}</td>
                     <td style={{ padding: '16px', color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: '1.05rem' }}>{row.punchIn}</td>
                     <td style={{ padding: '16px', color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: '1.05rem' }}>{row.punchOut}</td>
                     <td style={{ padding: '16px' }}>{getStatusBadge(row.status)}</td>

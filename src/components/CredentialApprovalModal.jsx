@@ -9,8 +9,6 @@ const CredentialApprovalModal = ({ isOpen, onClose, onConfirm, title = "Action R
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
-  if (!isOpen) return null;
-
   const clearSignature = () => {
     const canvas = canvasRef.current;
     if (canvas) {
@@ -185,6 +183,8 @@ const CredentialApprovalModal = ({ isOpen, onClose, onConfirm, title = "Action R
       color: '#64748b'
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div style={styles.overlay} onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose(); }}>

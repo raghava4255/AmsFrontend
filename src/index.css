@@ -187,8 +187,8 @@ h1, h2, h3, h4, h5, h6 {
 .glass-input::placeholder { color: var(--text-muted); }
 
 /* Hide default browser password reveal to prevent double eye icon */
-.glass-input::-ms-reveal,
-.glass-input::-ms-clear {
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
   display: none;
 }
 
