@@ -164,7 +164,7 @@ export const AdminEmployees = ({ currentUser }) => {
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{user.email}</div>
                     </td>
                     <td style={{ padding: '10px' }}>{user.department}</td>
-                    <td style={{ padding: '10px' }}>{user.role === 'manager' ? 'Team Lead' : (user.role === 'admin' ? 'HR / Admin' : 'Employee')}</td>
+                    <td style={{ padding: '10px' }}>{user.role === 'manager' ? 'Team Lead' : (user.role === 'admin' ? 'HR / Admin' : (user.role === 'reporting manager' ? 'Reporting Manager' : 'Employee'))}</td>
                     <td style={{ padding: '10px' }}>
                       {user.shift ? user.shift.name : (shifts.find(s => s.id === user.shiftId)?.name || 'None')}
                     </td>
@@ -214,7 +214,7 @@ export const AdminEmployees = ({ currentUser }) => {
               <strong style={{ color: 'var(--text-primary)' }}>Name:</strong> <span>{selectedUser.name}</span>
               <strong style={{ color: 'var(--text-primary)' }}>Email:</strong> <span>{selectedUser.email}</span>
               <strong style={{ color: 'var(--text-primary)' }}>Emp ID:</strong> <span>{selectedUser.employeeId || '---'}</span>
-              <strong style={{ color: 'var(--text-primary)' }}>Role:</strong> <span>{selectedUser.role === 'manager' ? 'Team Lead' : (selectedUser.role === 'admin' ? 'HR / Admin' : 'Employee')}</span>
+              <strong style={{ color: 'var(--text-primary)' }}>Role:</strong> <span>{selectedUser.role === 'manager' ? 'Team Lead' : (selectedUser.role === 'admin' ? 'HR / Admin' : (selectedUser.role === 'reporting manager' ? 'Reporting Manager' : 'Employee'))}</span>
               <strong style={{ color: 'var(--text-primary)' }}>Department:</strong> <span>{selectedUser.department || '---'}</span>
               <strong style={{ color: 'var(--text-primary)' }}>Shift:</strong> <span>{selectedUser.shift ? selectedUser.shift.name : (shifts.find(s => s.id === selectedUser.shiftId)?.name || 'None')}</span>
               <strong style={{ color: 'var(--text-primary)' }}>Shift Time:</strong> 

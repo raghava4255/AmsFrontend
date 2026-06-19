@@ -7,7 +7,7 @@ const AuthContext = createContext(null);
 const STORAGE_KEY_USER  = 'ams_user';
 const STORAGE_KEY_TOKEN = 'ams_token';
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [token, setToken]     = useState(null);
   const [loading, setLoading] = useState(true);
@@ -104,7 +104,7 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;

@@ -6,12 +6,15 @@ import {
   FileText, ShieldCheck, ChevronDown 
 } from 'lucide-react';
 import { ForgotPasswordModal } from './ForgotPasswordModal';
+import { API_BASE_URL } from '../config';
 import loginIllustration from "../assets/login_illustration.png";
 import companyLogo from "../assets/company.png";
 
 export const LoginPage = () => {
   const { login } = useAuth();
 
+  const [roles, setRoles] = useState([]);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(true);
   const [role, setRole] = useState('employee');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,6 +23,30 @@ export const LoginPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [shake, setShake] = useState(false);
+
+  // Fetch available roles from backend
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/roles`);
+        const data = await response.json();
+        setRoles(data);
+        if (data && data.length > 0) {
+          setRole(data[0].value);
+        }
+      } catch (err) {
+        console.error('Failed to fetch roles:', err);
+        setRoles([
+          { value: 'employee', label: 'Employee' },
+          { value: 'manager', label: 'Team Lead' },
+          { value: 'admin', label: 'HR / Admin' }
+        ]);
+      } finally {
+        setIsLoadingRoles(false);
+      }
+    };
+    fetchRoles();
+  }, []);
 
   // Sync body class with selected role and theme
   useEffect(() => {
@@ -177,10 +204,15 @@ export const LoginPage = () => {
                     style={styles.roleSelect}
                     value={role}
                     onChange={e => handleRoleSelect(e.target.value)}
+                    disabled={isLoadingRoles}
                   >
-                    <option value="employee">Employee</option>
-                    <option value="manager">Team Lead</option>
-                    <option value="admin">HR / Admin</option>
+                    {isLoadingRoles ? (
+                      <option value="">Loading roles...</option>
+                    ) : (
+                      roles.map(r => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))
+                    )}
                   </select>
                   <ChevronDown size={16} style={styles.selectChevron} />
                 </div>

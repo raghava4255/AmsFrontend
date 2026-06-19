@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { formatTime24h } from '../utils/time';
 import { formatDateDDMMMYYYY } from '../utils/dateFormatter';
@@ -13,6 +13,10 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import companylogo from "../assets/company logo.png"
+import { PasswordPolicyContext } from '../context/PasswordPolicyContext';
+import { validatePassword } from '../utils/passwordValidator';
+import PasswordCriteria from './PasswordCriteria';
+import { updatePasswordPolicy } from '../services/passwordPolicyService';
 
 import { AdminShifts } from './AdminShifts';
 import { AdminAttendance } from './AdminAttendance';
@@ -20,6 +24,7 @@ import { AdminEmployees } from './AdminEmployees';
 import { AdminEmails } from './AdminEmails';
 import EmployeeHome from './EmployeeHome';
 import CredentialApprovalModal from './CredentialApprovalModal';
+import { ReportingManagerDashboard } from './ReportingManagerDashboard';
 import { getCurrentPosition, reverseGeocode } from '../utils/location';
 
 /* ── Helper: extract initials from full name ─────────────────── */
@@ -528,6 +533,27 @@ const MonthlyDonutChart = ({ monthlySummary }) => {
 ═══════════════════════════════════════════════════════════════ */
 export const Dashboard = () => {
   const { user, setUser, logout } = useAuth();
+  const { policy, setPolicy } = useContext(PasswordPolicyContext) || {};
+
+  /* ── Password Policy Admin Form State ── */
+  const [policyMinLength, setPolicyMinLength] = useState(8);
+  const [policyMaxLength, setPolicyMaxLength] = useState(64);
+  const [policyRequireUpper, setPolicyRequireUpper] = useState(true);
+  const [policyRequireLower, setPolicyRequireLower] = useState(true);
+  const [policyRequireNumber, setPolicyRequireNumber] = useState(true);
+  const [policyRequireSpecial, setPolicyRequireSpecial] = useState(true);
+  const [policySaving, setPolicySaving] = useState(false);
+
+  useEffect(() => {
+    if (policy) {
+      setPolicyMinLength(policy.minLength ?? 8);
+      setPolicyMaxLength(policy.maxLength ?? 64);
+      setPolicyRequireUpper(policy.requireUpper ?? true);
+      setPolicyRequireLower(policy.requireLower ?? true);
+      setPolicyRequireNumber(policy.requireNumber ?? true);
+      setPolicyRequireSpecial(policy.requireSpecial ?? true);
+    }
+  }, [policy]);
 
   /* ── Shared state ── */
   const [clockedIn, setClockedIn] = useState(false);
@@ -535,7 +561,7 @@ export const Dashboard = () => {
   const [activities, setActivities] = useState([]);
   const [pendingLeaves, setPendingLeaves] = useState([]);
   const [currentAddress, setCurrentAddress] = useState('Fetching location...');
-  const [activeMenu, setActiveMenu] = useState('Dashboard');
+  const [activeMenu, setActiveMenu] = useState(() => user?.isFirstTime ? 'Change Password' : (user?.role === 'reporting manager' ? 'Reporting Manager' : 'Dashboard'));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [now, setNow] = useState(new Date());
 
@@ -605,7 +631,7 @@ export const Dashboard = () => {
 
   /* ── Credential Approval Modal ── */
   const [credentialModal, setCredentialModal] = useState({ isOpen: false, requestId: null, type: null, decision: null });
-  
+
   const [todayLogs, setTodayLogs] = useState([]);
   const [managerFilter, setManagerFilter] = useState('all'); // 'all' | 'present' | 'leave'
 
@@ -745,8 +771,8 @@ export const Dashboard = () => {
             .map(d => d.trim().toLowerCase())
             .filter(Boolean);
 
-          const staff = usersData.filter(u => 
-            u.role && u.role.includes('employee') && 
+          const staff = usersData.filter(u =>
+            u.role && u.role.includes('employee') &&
             managerDepts.includes((u.department || '').trim().toLowerCase())
           );
           setTeamMembers(staff);
@@ -1062,8 +1088,8 @@ export const Dashboard = () => {
 
     // Client-side monthly limit check (max 2 days per month)
     const targetMonth = flexyDate.substring(0, 7); // "yyyy-MM"
-    const countThisMonth = myFlexyRequests.filter(req => 
-      req.date.startsWith(targetMonth) && 
+    const countThisMonth = myFlexyRequests.filter(req =>
+      req.date.startsWith(targetMonth) &&
       (req.status === 'Pending' || req.status === 'Approved')
     ).length;
 
@@ -1183,7 +1209,7 @@ export const Dashboard = () => {
       if (!res.ok) throw new Error(data.error || 'Failed to resolve shift request.');
       setPendingShifts(prev => prev.filter(r => r.id !== id));
       triggerToast(`Shift Request ${decision === 'approve' ? 'Approved' : 'Rejected'}!`, 'success');
-      
+
       if (decision === 'approve') {
         // Refetch staff to update their shift details locally
         Promise.all([
@@ -1301,6 +1327,13 @@ export const Dashboard = () => {
       triggerToast('Old password is required to set a new password.', 'danger');
       return;
     }
+    if (newPassword) {
+      const criteriaResult = validatePassword(newPassword, policy || {}, user?.employeeId || "");
+      if (!criteriaResult.valid) {
+        triggerToast('New password does not meet password policy requirements.', 'danger');
+        return;
+      }
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/auth/update-profile`, {
         method: 'POST',
@@ -1324,6 +1357,38 @@ export const Dashboard = () => {
       setShowProfileModal(false);
     } catch (err) {
       triggerToast(err.message, 'danger');
+    }
+  };
+
+  const handleSavePolicy = async (e) => {
+    e.preventDefault();
+    if (policyMinLength < 1) {
+      triggerToast('Minimum length must be at least 1.', 'danger');
+      return;
+    }
+    if (policyMinLength > policyMaxLength) {
+      triggerToast('Minimum length cannot be greater than maximum length.', 'danger');
+      return;
+    }
+    setPolicySaving(true);
+    try {
+      const updated = await updatePasswordPolicy(user.id, {
+        minLength: policyMinLength,
+        maxLength: policyMaxLength,
+        requireUpper: policyRequireUpper,
+        requireLower: policyRequireLower,
+        requireNumber: policyRequireNumber,
+        requireSpecial: policyRequireSpecial
+      });
+      if (setPolicy) {
+        setPolicy(updated);
+      }
+      triggerToast('System password policy updated successfully!', 'success');
+    } catch (err) {
+      console.error(err);
+      triggerToast(err.message || 'Failed to update password policy.', 'danger');
+    } finally {
+      setPolicySaving(false);
     }
   };
 
@@ -1461,8 +1526,8 @@ export const Dashboard = () => {
                       {format(now, 'dd-MMM-yyyy')}
                     </div>
 
-                    <button 
-                      onClick={handleClockInOut} 
+                    <button
+                      onClick={handleClockInOut}
                       disabled={isOnLeaveToday}
                       style={{
                         display: 'flex',
@@ -1627,14 +1692,14 @@ export const Dashboard = () => {
                               {act.status === 'On Leave' ? (
                                 <span style={{ color: 'var(--text-muted)' }}>---</span>
                               ) : (
-                                <div style={{ 
-                                  fontWeight: '700', 
-                                  fontSize: '0.8rem', 
-                                  color: act.lateEntry || act.earlyExit ? '#ef4444' : '#10b981' 
+                                <div style={{
+                                  fontWeight: '700',
+                                  fontSize: '0.8rem',
+                                  color: act.lateEntry || act.earlyExit ? '#ef4444' : '#10b981'
                                 }}>
-                                  {act.lateEntry && act.earlyExit ? 'Late Early' : 
-                                   act.lateEntry ? 'Late' : 
-                                   act.earlyExit ? 'Early' : 'On Time'}
+                                  {act.lateEntry && act.earlyExit ? 'Late Early' :
+                                    act.lateEntry ? 'Late' :
+                                      act.earlyExit ? 'Early' : 'On Time'}
                                 </div>
                               )}
                               {act.overtimeHours > 0 && <div style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '4px' }}>+{act.overtimeHours}h OT</div>}
@@ -1740,12 +1805,12 @@ export const Dashboard = () => {
                             <div style={styles.leaveItemReason}>"{leave.reason}"</div>
                           )}
                         </div>
-                        <LeaveStatusBadge 
-                          status={leave.status} 
-                          tlStatus={leave.tlApprovalStatus} 
-                          hrStatus={leave.hrApprovalStatus} 
-                          tlName={leave.tlApproverSignature} 
-                          hrName={leave.hrApproverSignature} 
+                        <LeaveStatusBadge
+                          status={leave.status}
+                          tlStatus={leave.tlApprovalStatus}
+                          hrStatus={leave.hrApprovalStatus}
+                          tlName={leave.tlApproverSignature}
+                          hrName={leave.hrApproverSignature}
                         />
                       </div>
                     ))}
@@ -2002,95 +2067,95 @@ export const Dashboard = () => {
     return (
       <div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Quick Actions Row */}
-            <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: 'auto', letterSpacing: '0.05em' }}>Global Admin Actions:</span>
-              <button
-                id="add-employee-btn"
-                onClick={() => setShowAddEmployeeModal(true)}
-                className="btn-primary"
-                style={{ width: 'auto', padding: '8px 16px', display: 'flex', gap: '6px', alignItems: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
-              >
-                <UserPlus size={15} /> Create Account
-              </button>
-              <button
-                id="manage-dept-btn"
-                onClick={() => setShowManageDepartmentsModal(true)}
-                className="btn-primary"
-                style={{ width: 'auto', padding: '8px 16px', display: 'flex', gap: '6px', alignItems: 'center', background: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
-              >
-                <Users size={15} /> Manage Departments
-              </button>
-            </div>
+          {/* Quick Actions Row */}
+          <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginRight: 'auto', letterSpacing: '0.05em' }}>Global Admin Actions:</span>
+            <button
+              id="add-employee-btn"
+              onClick={() => setShowAddEmployeeModal(true)}
+              className="btn-primary"
+              style={{ width: 'auto', padding: '8px 16px', display: 'flex', gap: '6px', alignItems: 'center', background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              <UserPlus size={15} /> Create Account
+            </button>
+            <button
+              id="manage-dept-btn"
+              onClick={() => setShowManageDepartmentsModal(true)}
+              className="btn-primary"
+              style={{ width: 'auto', padding: '8px 16px', display: 'flex', gap: '6px', alignItems: 'center', background: 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              <Users size={15} /> Manage Departments
+            </button>
+          </div>
 
-            {/* Stats Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-              {/* Attendance Statistics */}
-              <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <h4 style={{ margin: 0, fontSize: '0.90rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attendance Stats (Today)</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                  {[
-                    { label: 'Present', val: attStats.presentToday, list: attStats.presentList || [], color: '#10b981', bg: 'rgba(16,185,129,0.04)' },
-                    { label: 'Absent', val: attStats.absentToday, list: attStats.absentList || [], color: '#ef4444', bg: 'rgba(239,68,68,0.04)' },
-                    { label: 'Late', val: attStats.lateArrivals, list: attStats.lateList || [], color: '#f59e0b', bg: 'rgba(245,158,11,0.04)' },
-                    { label: 'Early', val: attStats.earlyDepartures, list: attStats.earlyList || [], color: '#3b82f6', bg: 'rgba(59,130,246,0.04)' }
-                  ].map((stat, idx) => (
-                    <div 
-                      key={idx} 
-                      onClick={() => {
-                        setStatsDetailCategory(stat.label);
-                        setStatsDetailList(stat.list);
-                      }}
-                      style={{ 
-                        textAlign: 'center', 
-                        padding: '10px 4px', 
-                        background: stat.bg, 
-                        borderRadius: '8px', 
-                        border: `1px solid ${stat.color}15`,
-                        cursor: 'pointer',
-                        transition: 'transform 0.2s, border-color 0.2s, box-shadow 0.2s',
-                        userSelect: 'none'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
-                        e.currentTarget.style.borderColor = stat.color + '40';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.borderColor = stat.color + '15';
-                      }}
-                    >
-                      <div style={{ fontSize: '1.35rem', fontWeight: 800, color: stat.color }}>{stat.val}</div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 500, whiteSpace: 'nowrap' }}>{stat.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Visual Reports Row 1 */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
-              <div className="glass-panel" style={{ padding: '24px' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Attendance Trend (Last 7 Days)</h4>
-                <WeeklyTrendChart trendData={weeklyTrend} />
-              </div>
-
-              <div className="glass-panel" style={{ padding: '24px' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Department-wise Attendance</h4>
-                <DepartmentChart deptStats={departmentStats} />
-              </div>
-            </div>
-
-            {/* Visual Reports Row 2 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-              <div className="glass-panel" style={{ padding: '24px' }}>
-                <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Monthly Attendance Summary</h4>
-                <MonthlyDonutChart monthlySummary={monthlySummary} />
+          {/* Stats Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+            {/* Attendance Statistics */}
+            <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <h4 style={{ margin: 0, fontSize: '0.90rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attendance Stats (Today)</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {[
+                  { label: 'Present', val: attStats.presentToday, list: attStats.presentList || [], color: '#10b981', bg: 'rgba(16,185,129,0.04)' },
+                  { label: 'Absent', val: attStats.absentToday, list: attStats.absentList || [], color: '#ef4444', bg: 'rgba(239,68,68,0.04)' },
+                  { label: 'Late', val: attStats.lateArrivals, list: attStats.lateList || [], color: '#f59e0b', bg: 'rgba(245,158,11,0.04)' },
+                  { label: 'Early', val: attStats.earlyDepartures, list: attStats.earlyList || [], color: '#3b82f6', bg: 'rgba(59,130,246,0.04)' }
+                ].map((stat, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setStatsDetailCategory(stat.label);
+                      setStatsDetailList(stat.list);
+                    }}
+                    style={{
+                      textAlign: 'center',
+                      padding: '10px 4px',
+                      background: stat.bg,
+                      borderRadius: '8px',
+                      border: `1px solid ${stat.color}15`,
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s, border-color 0.2s, box-shadow 0.2s',
+                      userSelect: 'none'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)';
+                      e.currentTarget.style.borderColor = stat.color + '40';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'none';
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.borderColor = stat.color + '15';
+                    }}
+                  >
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, color: stat.color }}>{stat.val}</div>
+                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 500, whiteSpace: 'nowrap' }}>{stat.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
+
+          {/* Visual Reports Row 1 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
+            <div className="glass-panel" style={{ padding: '24px' }}>
+              <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Attendance Trend (Last 7 Days)</h4>
+              <WeeklyTrendChart trendData={weeklyTrend} />
+            </div>
+
+            <div className="glass-panel" style={{ padding: '24px' }}>
+              <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Department-wise Attendance</h4>
+              <DepartmentChart deptStats={departmentStats} />
+            </div>
+          </div>
+
+          {/* Visual Reports Row 2 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+            <div className="glass-panel" style={{ padding: '24px' }}>
+              <h4 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Monthly Attendance Summary</h4>
+              <MonthlyDonutChart monthlySummary={monthlySummary} />
+            </div>
+          </div>
+        </div>
 
         {/* ── HR: Add Employee Modal ── */}
         {showAddEmployeeModal && (
@@ -2134,7 +2199,7 @@ export const Dashboard = () => {
                         {newEmployeeRole.length === 0 ? (
                           <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Select role(s)...</span>
                         ) : newEmployeeRole.map(r => {
-                          const cfg = { employee: { label: 'Employee', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }, manager: { label: 'Team Lead', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' }, admin: { label: 'HR / Admin', color: '#e11d48', bg: 'rgba(225,29,72,0.12)' } }[r];
+                          const cfg = { employee: { label: 'Employee', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' }, manager: { label: 'Team Lead', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' }, admin: { label: 'HR / Admin', color: '#e11d48', bg: 'rgba(225,29,72,0.12)' }, 'reporting manager': { label: 'Reporting Manager', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' } }[r];
                           return cfg ? (
                             <span key={r} style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, color: cfg.color, background: cfg.bg }}>
                               ✓ {cfg.label}
@@ -2144,16 +2209,17 @@ export const Dashboard = () => {
                         })}
                       </div>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: '8px', transition: 'transform 0.2s', transform: showRoleDropdown ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                        <polyline points="6 9 12 15 18 9"/>
+                        <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </div>
                     {/* Dropdown panel */}
                     {showRoleDropdown && (
                       <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#ffffff', border: '1.5px solid #3b82f6', borderTop: 'none', borderRadius: '0 0 8px 8px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)', zIndex: 50, overflow: 'hidden' }}>
                         {[
-                          { value: 'employee', label: 'Employee',   desc: 'Standard attendance & leave access', color: '#3b82f6', bg: 'rgba(59,130,246,0.06)', icon: '👤' },
-                          { value: 'manager',  label: 'Team Lead',  desc: 'Approves leaves & manages team',     color: '#8b5cf6', bg: 'rgba(139,92,246,0.06)', icon: '👥' },
-                          { value: 'admin',    label: 'HR / Admin', desc: 'Full system & user management',      color: '#e11d48', bg: 'rgba(225,29,72,0.06)',  icon: '🛡️' }
+                          { value: 'employee', label: 'Employee', desc: 'Standard attendance & leave access', color: '#3b82f6', bg: 'rgba(59,130,246,0.06)', icon: '👤' },
+                          { value: 'manager', label: 'Team Lead', desc: 'Approves leaves & manages team', color: '#8b5cf6', bg: 'rgba(139,92,246,0.06)', icon: '👥' },
+                          { value: 'reporting manager', label: 'Reporting Manager', desc: 'View reports only', color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', icon: '📊' },
+                          { value: 'admin', label: 'HR / Admin', desc: 'Full system & user management', color: '#e11d48', bg: 'rgba(225,29,72,0.06)', icon: '🛡️' }
                         ].map((role, idx, arr) => {
                           const isChecked = newEmployeeRole.includes(role.value);
                           return (
@@ -2164,7 +2230,7 @@ export const Dashboard = () => {
                               onMouseLeave={e => { e.currentTarget.style.background = isChecked ? role.bg : '#ffffff'; }}
                             >
                               <div style={{ width: '16px', height: '16px', borderRadius: '4px', border: `2px solid ${isChecked ? role.color : '#cbd5e1'}`, background: isChecked ? role.color : '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>
-                                {isChecked && <svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                {isChecked && <svg width="9" height="7" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                               </div>
                               <span style={{ fontSize: '0.95rem', lineHeight: 1 }}>{role.icon}</span>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
@@ -2180,7 +2246,7 @@ export const Dashboard = () => {
                 </div>
 
 
-                 <div style={styles.modalInputGroup}>
+                <div style={styles.modalInputGroup}>
                   <label style={styles.modalLabel}>Assign Shift</label>
                   <select value={newEmployeeShift} onChange={e => setNewEmployeeShift(e.target.value)} style={styles.modalSelect}>
                     {availableShifts.map(s => (
@@ -2252,14 +2318,14 @@ export const Dashboard = () => {
                     fontSize: '0.8rem',
                     padding: '2px 8px',
                     borderRadius: '12px',
-                    backgroundColor: statsDetailCategory === 'Present' ? 'rgba(16, 185, 129, 0.1)' : 
-                                     statsDetailCategory === 'Absent' ? 'rgba(239, 68, 68, 0.1)' : 
-                                     statsDetailCategory === 'Late' ? 'rgba(245, 158, 11, 0.1)' : 
-                                     statsDetailCategory === 'Early' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                    color: statsDetailCategory === 'Present' ? '#10b981' : 
-                           statsDetailCategory === 'Absent' ? '#ef4444' : 
-                           statsDetailCategory === 'Late' ? '#f59e0b' : 
-                           statsDetailCategory === 'Early' ? '#3b82f6' : '#8b5cf6',
+                    backgroundColor: statsDetailCategory === 'Present' ? 'rgba(16, 185, 129, 0.1)' :
+                      statsDetailCategory === 'Absent' ? 'rgba(239, 68, 68, 0.1)' :
+                        statsDetailCategory === 'Late' ? 'rgba(245, 158, 11, 0.1)' :
+                          statsDetailCategory === 'Early' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                    color: statsDetailCategory === 'Present' ? '#10b981' :
+                      statsDetailCategory === 'Absent' ? '#ef4444' :
+                        statsDetailCategory === 'Late' ? '#f59e0b' :
+                          statsDetailCategory === 'Early' ? '#3b82f6' : '#8b5cf6',
                     fontWeight: '700'
                   }}>
                     {statsDetailList.length}
@@ -2280,7 +2346,7 @@ export const Dashboard = () => {
                         <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', fontWeight: '700' }}>Emp ID</th>
                         <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', fontWeight: '700' }}>Name</th>
                         <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', fontWeight: '700' }}>Department</th>
-                        
+
                         {statsDetailCategory === 'Present' && (
                           <>
                             <th style={{ padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.08)', fontWeight: '700' }}>In Time</th>
@@ -2301,7 +2367,7 @@ export const Dashboard = () => {
                           <td style={{ padding: '12px 16px', fontWeight: '600', color: 'var(--text-primary)' }}>{emp.employeeId || '---'}</td>
                           <td style={{ padding: '12px 16px', fontWeight: '500', color: 'var(--text-primary)' }}>{emp.name}</td>
                           <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>{emp.department}</td>
-                          
+
                           {statsDetailCategory === 'Present' && (
                             <>
                               <td style={{ padding: '12px 16px', color: '#10b981', fontWeight: '600' }}>{emp.clockIn || '---'}</td>
@@ -2342,7 +2408,7 @@ export const Dashboard = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create leave type.');
-      
+
       triggerToast('Leave type created successfully!', 'success');
       setNewLeaveTypeName('');
       fetchLeaveTypes(); // Refresh list
@@ -2492,10 +2558,14 @@ export const Dashboard = () => {
       return renderLeaveTypesManagement();
     }
 
+    if (activeMenu === 'Reporting Manager') {
+      return <ReportingManagerDashboard />;
+    }
+
     if (activeMenu === 'Dashboard') {
       if (user.role === 'employee') {
         return (
-          <EmployeeHome 
+          <EmployeeHome
             user={user}
             clockedIn={clockedIn}
             clockInTime={clockInTime}
@@ -2624,8 +2694,8 @@ export const Dashboard = () => {
                 {format(now, 'dd-MMM-yyyy')}
               </div>
 
-              <button 
-                onClick={handleClockInOut} 
+              <button
+                onClick={handleClockInOut}
                 disabled={isOnLeaveToday}
                 style={{
                   display: 'flex',
@@ -2749,12 +2819,12 @@ export const Dashboard = () => {
                       <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#1e293b' }}>{l.type}</div>
                       <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{l.duration}</div>
                     </div>
-                    <LeaveStatusBadge 
-                      status={l.status} 
-                      tlStatus={l.tlApprovalStatus} 
-                      hrStatus={l.hrApprovalStatus} 
-                      tlName={l.tlApproverSignature} 
-                      hrName={l.hrApproverSignature} 
+                    <LeaveStatusBadge
+                      status={l.status}
+                      tlStatus={l.tlApprovalStatus}
+                      hrStatus={l.hrApprovalStatus}
+                      tlName={l.tlApproverSignature}
+                      hrName={l.hrApproverSignature}
                     />
                   </div>
                 ))}
@@ -2804,12 +2874,12 @@ export const Dashboard = () => {
                       {/* Approver info (resolved requests) */}
                       {req.status !== 'Pending' && (
                         <div style={{ marginTop: '10px' }}>
-                          <LeaveStatusBadge 
-                            status={req.status} 
-                            tlStatus={req.tlApprovalStatus} 
-                            hrStatus={req.hrApprovalStatus} 
-                            tlName={req.tlApproverSignature} 
-                            hrName={req.hrApproverSignature} 
+                          <LeaveStatusBadge
+                            status={req.status}
+                            tlStatus={req.tlApprovalStatus}
+                            hrStatus={req.hrApprovalStatus}
+                            tlName={req.tlApproverSignature}
+                            hrName={req.hrApproverSignature}
                           />
                         </div>
                       )}
@@ -2870,12 +2940,12 @@ export const Dashboard = () => {
                       {/* Approver info (resolved requests) */}
                       {req.status !== 'Pending' && (
                         <div style={{ marginTop: '10px' }}>
-                          <LeaveStatusBadge 
-                            status={req.status} 
-                            tlStatus={req.tlApprovalStatus} 
-                            hrStatus={req.hrApprovalStatus} 
-                            tlName={req.tlApproverSignature} 
-                            hrName={req.hrApproverSignature} 
+                          <LeaveStatusBadge
+                            status={req.status}
+                            tlStatus={req.tlApprovalStatus}
+                            hrStatus={req.hrApprovalStatus}
+                            tlName={req.tlApproverSignature}
+                            hrName={req.hrApproverSignature}
                           />
                         </div>
                       )}
@@ -2965,20 +3035,20 @@ export const Dashboard = () => {
                   <span style={{ fontWeight: '700', color: '#ef4444' }}>{user.shift?.graceTime || '15'} minutes</span>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   setShowShiftRequestModal(true);
                   if (availableShifts.length > 0 && !requestedShiftId) {
                     setRequestedShiftId(availableShifts[0].id.toString());
                   }
                 }}
-                className="btn-primary" 
-                style={{ 
-                  marginTop: '20px', 
-                  width: '100%', 
-                  display: 'flex', 
-                  justifyContent: 'center', 
-                  gap: '8px', 
+                className="btn-primary"
+                style={{
+                  marginTop: '20px',
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '8px',
                   alignItems: 'center',
                   background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
                   border: 'none',
@@ -3022,157 +3092,295 @@ export const Dashboard = () => {
 
     if (activeMenu === 'Settings') {
       return (
-        <div className="glass-panel" style={{ padding: '24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', maxWidth: '600px' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#0f172a', marginBottom: '20px' }}>Account &amp; Security Settings</h3>
-          <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
-              <Avatar src={profileAvatarUrl || user.avatar} name={user.name} role={user.role} size={80} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Avatar URL</label>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input
-                  type="text"
-                  placeholder="https://example.com/avatar.jpg"
-                  value={profileAvatarUrl}
-                  onChange={e => setProfileAvatarUrl(e.target.value)}
-                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', flex: 1, outline: 'none' }}
-                />
-                <label className="btn-primary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', borderRadius: '10px', fontSize: '0.9rem', margin: 0, width: 'auto' }}>
-                  Upload
-                  <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
-                </label>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Name</label>
-                <input
-                  type="text"
-                  value={user.name}
-                  readOnly
-                  style={{
-                    padding: '11px 14px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    width: '100%',
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed'
-                  }}
-                />
+        <div style={{ display: 'grid', gridTemplateColumns: user?.role === 'admin' ? 'repeat(auto-fit, minmax(480px, 1fr))' : '1fr', gap: '24px', alignItems: 'start', width: '100%' }}>
+          {/* Account Profile Card */}
+          <div className="glass-panel" style={{ padding: '24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', width: '100%' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#0f172a', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings size={20} color="#64748b" /> Account &amp; Security Settings
+            </h3>
+            <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+                <Avatar src={profileAvatarUrl || user.avatar} name={user.name} role={user.role} size={80} />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Employee ID</label>
-                <input
-                  type="text"
-                  value={user.employeeId || '---'}
-                  readOnly
-                  style={{
-                    padding: '11px 14px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    width: '100%',
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed'
-                  }}
-                />
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Avatar URL</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text"
+                    placeholder="https://example.com/avatar.jpg"
+                    value={profileAvatarUrl}
+                    onChange={e => setProfileAvatarUrl(e.target.value)}
+                    style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', flex: 1, outline: 'none' }}
+                  />
+                  <label className="btn-primary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px', borderRadius: '10px', fontSize: '0.9rem', margin: 0, width: 'auto' }}>
+                    Upload
+                    <input type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+                  </label>
+                </div>
               </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Name</label>
+                  <input
+                    type="text"
+                    value={user.name}
+                    readOnly
+                    style={{
+                      padding: '11px 14px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      width: '100%',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Employee ID</label>
+                  <input
+                    type="text"
+                    value={user.employeeId || '---'}
+                    readOnly
+                    style={{
+                      padding: '11px 14px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      width: '100%',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed'
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Designation</label>
+                  <input
+                    type="text"
+                    value={user.role === 'manager' ? 'Team Lead' : (user.role === 'admin' ? 'HR / Admin' : 'Employee')}
+                    readOnly
+                    style={{
+                      padding: '11px 14px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      width: '100%',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Department</label>
+                  <input
+                    type="text"
+                    value={user.department || '---'}
+                    readOnly
+                    style={{
+                      padding: '11px 14px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      width: '100%',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed'
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Assigned Shift</label>
+                  <input
+                    type="text"
+                    value={user.shift ? `${user.shift.name} (${formatTime24h(user.shift.startTime)} - ${formatTime24h(user.shift.endTime)})` : 'General Shift (09:00 - 18:00)'}
+                    readOnly
+                    style={{
+                      padding: '11px 14px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      width: '100%',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed'
+                    }}
+                  />
+                </div>
+                <div></div>
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Designation</label>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Current Password (required to change password)</label>
                 <input
-                  type="text"
-                  value={user.role === 'manager' ? 'Team Lead' : (user.role === 'admin' ? 'HR / Admin' : 'Employee')}
-                  readOnly
-                  style={{
-                    padding: '11px 14px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    width: '100%',
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed'
-                  }}
+                  type="password"
+                  placeholder="Enter current password"
+                  value={oldPassword}
+                  onChange={e => setOldPassword(e.target.value)}
+                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Department</label>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>New Password</label>
                 <input
-                  type="text"
-                  value={user.department || '---'}
-                  readOnly
-                  style={{
-                    padding: '11px 14px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    width: '100%',
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed'
-                  }}
+                  type="password"
+                  placeholder={policy ? `Min length: ${policy.minLength}` : "At least 8 characters, uppercase, digit & symbol"}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
                 />
               </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {policy && newPassword && (
+                <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Password Strength Requirements:</span>
+                  <PasswordCriteria criteria={validatePassword(newPassword, policy || {}, user?.employeeId || "").criteria} />
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Assigned Shift</label>
+                <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Confirm New Password</label>
                 <input
-                  type="text"
-                  value={user.shift ? `${user.shift.name} (${formatTime24h(user.shift.startTime)} - ${formatTime24h(user.shift.endTime)})` : 'General Shift (09:00 - 18:00)'}
-                  readOnly
-                  style={{
-                    padding: '11px 14px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    width: '100%',
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed'
-                  }}
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
                 />
               </div>
-              <div></div>
+              <button type="submit" className="btn-primary" style={{ marginTop: '10px' }}>Save Profile Changes</button>
+            </form>
+          </div>
+
+          {/* Admin Password Policy Panel */}
+          {user?.role === 'admin' && (
+            <div className="glass-panel" style={{ padding: '24px', backgroundColor: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', width: '100%' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#0f172a', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldAlert size={20} color="#e11d48" /> System Password Policy
+              </h3>
+              
+              <div style={{ padding: '12px 16px', backgroundColor: 'rgba(225, 29, 72, 0.05)', border: '1px solid rgba(225, 29, 72, 0.1)', borderRadius: '10px', color: '#e11d48', fontSize: '0.82rem', lineHeight: '1.5', marginBottom: '20px' }}>
+                <strong>Administrative Access:</strong> Configure system-wide password complexity rules. These rules are dynamically queried by the backend and enforced during user registration, profile updates, and password resets.
+              </div>
+
+              <form onSubmit={handleSavePolicy} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                
+                {/* Length Limits */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Min Password Length</label>
+                    <input
+                      type="number"
+                      min={4}
+                      max={128}
+                      value={policyMinLength}
+                      onChange={e => setPolicyMinLength(parseInt(e.target.value) || 8)}
+                      style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', transition: 'border-color 0.2s' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Max Password Length</label>
+                    <input
+                      type="number"
+                      min={6}
+                      max={256}
+                      value={policyMaxLength}
+                      onChange={e => setPolicyMaxLength(parseInt(e.target.value) || 64)}
+                      style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', outline: 'none', transition: 'border-color 0.2s' }}
+                    />
+                  </div>
+                </div>
+
+                <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '5px 0' }} />
+
+                {/* Switch Toggles for Complexity Requirements */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Complexity Requirements</span>
+                  
+                  {/* Require Uppercase */}
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#1e293b' }}>Require Uppercase Letter</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Must contain at least one uppercase letter (A-Z)</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={policyRequireUpper}
+                      onChange={e => setPolicyRequireUpper(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#e11d48' }}
+                    />
+                  </label>
+
+                  {/* Require Lowercase */}
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#1e293b' }}>Require Lowercase Letter</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Must contain at least one lowercase letter (a-z)</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={policyRequireLower}
+                      onChange={e => setPolicyRequireLower(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#e11d48' }}
+                    />
+                  </label>
+
+                  {/* Require Number */}
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#1e293b' }}>Require Digit</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Must contain at least one numeric digit (0-9)</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={policyRequireNumber}
+                      onChange={e => setPolicyRequireNumber(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#e11d48' }}
+                    />
+                  </label>
+
+                  {/* Require Special */}
+                  <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#1e293b' }}>Require Special Character</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Must contain at least one special character (e.g. @, #, $, %)</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={policyRequireSpecial}
+                      onChange={e => setPolicyRequireSpecial(e.target.checked)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#e11d48' }}
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={policySaving}
+                  style={{
+                    marginTop: '10px',
+                    backgroundColor: '#e11d48',
+                    borderColor: '#e11d48',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 12px rgba(225, 29, 72, 0.15)',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={e => e.currentTarget.style.filter = 'brightness(0.9)'}
+                  onMouseOut={e => e.currentTarget.style.filter = 'none'}
+                >
+                  {policySaving ? 'Saving...' : 'Save Password Policy'}
+                </button>
+
+              </form>
             </div>
-            <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '10px 0' }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Current Password (required to change password)</label>
-              <input
-                type="password"
-                placeholder="Enter current password"
-                value={oldPassword}
-                onChange={e => setOldPassword(e.target.value)}
-                style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>New Password</label>
-              <input
-                type="password"
-                placeholder="At least 8 characters, uppercase, digit &amp; symbol"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                style={{ padding: '11px 14px', border: '1px solid #e2e8f0', borderRadius: '10px', width: '100%', outline: 'none' }}
-              />
-            </div>
-            <button type="submit" className="btn-primary" style={{ marginTop: '10px' }}>Save Profile Changes</button>
-          </form>
+          )}
         </div>
       );
     }
@@ -3196,13 +3404,6 @@ export const Dashboard = () => {
                         {formatDateDDMMMYYYY(notif.createdAt)} {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteNotification(notif.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#94a3b8' }}
-                      title="Dismiss"
-                    >
-                      <X size={14} />
-                    </button>
                   </div>
                 ))
               )}
@@ -3224,13 +3425,149 @@ export const Dashboard = () => {
         </div>
       );
     }
+
+    if (activeMenu === 'Change Password') {
+      const criteriaResult = validatePassword(newPassword, policy || {}, user?.employeeId || "");
+      const isPasswordValid = criteriaResult.valid;
+
+      const handleFirstTimeChangePassword = async (e) => {
+        e.preventDefault();
+        if (newPassword !== confirmPassword) {
+          triggerToast('New passwords do not match.', 'danger');
+          return;
+        }
+        if (!isPasswordValid) {
+          triggerToast('Password does not meet criteria.', 'danger');
+          return;
+        }
+        try {
+          const res = await fetch(`${API_BASE_URL}/auth/update-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              oldPassword: oldPassword,
+              newPassword: newPassword
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to update password.');
+
+          triggerToast('Password updated successfully!', 'success');
+          // Reset password inputs
+          setOldPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+
+          // Update local state
+          setUser(prev => {
+            const updatedUser = { ...prev, isFirstTime: false };
+            localStorage.setItem('ams_user', JSON.stringify(updatedUser));
+            return updatedUser;
+          });
+
+          // Redirect to appropriate landing tab
+          setActiveMenu(user?.role === 'reporting manager' ? 'Reporting Manager' : 'Dashboard');
+        } catch (err) {
+          triggerToast(err.message, 'danger');
+        }
+      };
+
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', padding: '20px 0' }}>
+          <div className="glass-panel" style={{ padding: '36px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #cbd5e180', width: '100%', maxWidth: '520px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Clock size={24} color="#3b82f6" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>Change Your Password</h3>
+                <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>First Time Login Verification</span>
+              </div>
+            </div>
+
+            <div style={{ padding: '12px 16px', backgroundColor: '#fef3c7', border: '1px solid #fde68a', borderRadius: '10px', color: '#92400e', fontSize: '0.82rem', lineHeight: '1.5', marginBottom: '24px' }}>
+              <strong>Security Requirement:</strong> Because your account was recently created, you must update your temporary password before you can access the attendance dashboard.
+            </div>
+
+            <form onSubmit={handleFirstTimeChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Temporary Password</label>
+                <input
+                  type="password"
+                  placeholder="Enter temporary password"
+                  value={oldPassword}
+                  onChange={e => setOldPassword(e.target.value)}
+                  required
+                  style={{ padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>New Secure Password</label>
+                <input
+                  type="password"
+                  placeholder="Create new password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  required
+                  style={{ padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                />
+              </div>
+
+              {/* Real-time Password Criteria Feedback */}
+              {policy && newPassword && (
+                <div style={{ padding: '12px', border: '1px solid #e2e8f0', borderRadius: '10px', backgroundColor: '#f8fafc' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Password Strength Requirements:</span>
+                  <PasswordCriteria criteria={criteriaResult.criteria} />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confirm New Password</label>
+                <input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                  style={{ padding: '12px 14px', border: '1px solid #cbd5e1', borderRadius: '10px', width: '100%', outline: 'none', fontSize: '0.9rem', backgroundColor: '#f8fafc' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={!isPasswordValid || newPassword !== confirmPassword}
+                style={{
+                  marginTop: '8px',
+                  padding: '14px',
+                  fontWeight: '700',
+                  fontSize: '0.95rem',
+                  borderRadius: '10px',
+                  cursor: (!isPasswordValid || newPassword !== confirmPassword) ? 'not-allowed' : 'pointer',
+                  opacity: (!isPasswordValid || newPassword !== confirmPassword) ? 0.6 : 1,
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                  boxShadow: (!isPasswordValid || newPassword !== confirmPassword) ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.25)',
+                  border: 'none',
+                  color: '#ffffff',
+                  width: '100%'
+                }}
+              >
+                Activate Account &amp; Login
+              </button>
+            </form>
+          </div>
+        </div>
+      );
+    }
   };
 
   /* ══════════════════════════════════════════════════════════════
      ROOT RENDER WITH SIDEBAR NAVIGATION LAYOUT
   ═══════════════════════════════════════════════════════════════ */
   return (
-    <div style={{...styles.appLayout, flexDirection: 'column'}}>
+    <div style={{ ...styles.appLayout, flexDirection: 'column' }}>
       {/* Toast Alert */}
       {toastMessage && (
         <div style={{
@@ -3244,37 +3581,21 @@ export const Dashboard = () => {
       )}
 
       {/* TOP NAVBAR HEADER */}
-      <header style={{...styles.topbar, width: '100%', boxSizing: 'border-box'}}>
-        <div style={{...styles.topbarLeft, display: 'flex', alignItems: 'center', gap: '20px'}}>
+      <header style={{ ...styles.topbar, width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ ...styles.topbarLeft, display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Users size={24} color="#3b82f6" />
-            <span style={{...styles.sidebarBrandText, fontSize: '1.4rem', fontWeight: 'bold'}}>People</span>
+            <span style={{ ...styles.sidebarBrandText, fontSize: '1.4rem', fontWeight: 'bold' }}>People</span>
           </div>
-          
-          <button 
-            onClick={() => setIsSidebarCollapsed(prev => !prev)}
-            style={{
-              ...styles.sidebarCollapseBtn,
-              padding: '6px',
-              borderRadius: '6px',
-              backgroundColor: 'rgba(0,0,0,0.03)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: 'none',
-              cursor: 'pointer'
-            }}
-            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-          >
-            <Menu size={18} color="#64748b" />
-          </button>
+
+
         </div>
 
         <div style={styles.topbarRight}>
 
           <div style={{ position: 'relative' }}>
-            <button 
-              onClick={() => setShowNotificationPanel(prev => !prev)} 
+            <button
+              onClick={() => setShowNotificationPanel(prev => !prev)}
               style={styles.topbarBell}
               title="Notifications"
             >
@@ -3283,14 +3604,14 @@ export const Dashboard = () => {
                 <span style={styles.topbarBellBadge}>{notifications.length}</span>
               )}
             </button>
-            
+
             {showNotificationPanel && (
               <div style={styles.notificationPanel}>
                 <div style={styles.notificationHeader}>
                   <span style={styles.notificationTitle}>Notifications</span>
                   {notifications.length > 0 && (
-                    <button 
-                      onClick={handleClearAllNotifications} 
+                    <button
+                      onClick={handleClearAllNotifications}
                       style={styles.notificationClearBtn}
                     >
                       Clear All
@@ -3307,7 +3628,7 @@ export const Dashboard = () => {
                       let IconComponent = Info;
                       let iconColor = '#3b82f6';
                       let bgLight = 'rgba(59, 130, 246, 0.1)';
-                      
+
                       if (notif.type === 'success') {
                         IconComponent = CheckCircle;
                         iconColor = '#10b981';
@@ -3321,13 +3642,13 @@ export const Dashboard = () => {
                         iconColor = '#ef4444';
                         bgLight = 'rgba(239, 68, 68, 0.1)';
                       }
-                      
+
                       if (notif.title && notif.title.startsWith('New Email:')) {
                         IconComponent = Mail;
                         iconColor = '#8b5cf6';
                         bgLight = 'rgba(139, 92, 246, 0.1)';
                       }
-                      
+
                       return (
                         <div key={notif.id} style={styles.notificationItem}>
                           <div style={{
@@ -3346,7 +3667,7 @@ export const Dashboard = () => {
                               {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </div>
-                          <button 
+                          <button
                             onClick={() => handleDeleteNotification(notif.id)}
                             style={styles.notificationDismissBtn}
                             title="Dismiss"
@@ -3363,15 +3684,19 @@ export const Dashboard = () => {
           </div>
 
           <div
-            style={styles.topbarUser}
+            style={{
+              ...styles.topbarUser,
+              cursor: user?.isFirstTime ? 'default' : 'pointer'
+            }}
             onClick={() => {
+              if (user?.isFirstTime) return;
               setProfileAvatarUrl(user.avatar || '');
               setOldPassword('');
               setNewPassword('');
               setConfirmPassword('');
               setShowProfileModal(true);
             }}
-            title="Edit Profile"
+            title={user?.isFirstTime ? "Password change required" : "Edit Profile"}
           >
             <Avatar src={user.avatar} name={user.name} role={user.role} size={36} />
             <div style={styles.topbarUserInfo}>
@@ -3391,81 +3716,111 @@ export const Dashboard = () => {
       {/* BODY WRAPPER */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-      {/* SIDEBAR */}
-      <aside style={{
-        ...styles.sidebar,
-        width: isSidebarCollapsed ? '80px' : '260px',
-        padding: isSidebarCollapsed ? '24px 8px' : '24px 16px',
-        transition: 'width 0.3s ease, padding 0.3s ease, background-color 0.3s ease',
-        height: 'calc(100vh - 70px)',
-        top: 0
-      }}>
-        <div style={{
-          ...styles.sidebarBrand,
-          justifyContent: 'center',
-          padding: '0',
-          marginBottom: '20px'
+        {/* SIDEBAR */}
+        <aside style={{
+          ...styles.sidebar,
+          width: isSidebarCollapsed ? '80px' : '260px',
+          padding: isSidebarCollapsed ? '24px 8px' : '24px 16px',
+          transition: 'width 0.3s ease, padding 0.3s ease, background-color 0.3s ease',
+          height: 'calc(100vh - 70px)',
+          top: 0
         }}>
-        </div>
+          <div style={{
+            ...styles.sidebarBrand,
+            justifyContent: 'center',
+            padding: '0',
+            marginBottom: '20px'
+          }}>
+          </div>
 
-        <div style={styles.sidebarMenu}>
-          {(() => {
-            if (user?.role === 'admin') {
-              return [
-                { id: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-                { id: 'Shifts', icon: <Clock size={18} /> },
-                { id: 'Attendance History', icon: <Users size={18} /> },
-                { id: 'Employees', icon: <UserCheck size={18} /> },
-                { id: 'Leaves', icon: <Calendar size={18} /> },
-                { id: 'Leave Types', icon: <Layers size={18} /> },
-                { id: 'Settings', icon: <Settings size={18} /> },
-                { id: 'Help', icon: <HelpCircle size={18} /> }
-              ];
-            } else if (user?.role === 'manager') {
-              return [
-                { id: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-                { id: 'Reports', icon: <FileText size={18} /> },
-                { id: 'Leaves', icon: <Calendar size={18} /> },
-                { id: 'Settings', icon: <Settings size={18} /> },
-                { id: 'Help', icon: <HelpCircle size={18} /> }
-              ];
-            } else {
-              return [
-                { id: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-                { id: 'Attendance', icon: <Clock size={18} /> },
-                { id: 'Reports', icon: <FileText size={18} /> },
-                { id: 'Leaves', icon: <Calendar size={18} /> },
-                { id: 'Master Data', icon: <Layers size={18} /> },
-                { id: 'Settings', icon: <Settings size={18} /> },
-                { id: 'Help', icon: <HelpCircle size={18} /> }
-              ];
-            }
-          })()
-          .map(item => {
-            const isActive = activeMenu === item.id;
-            return (
-              <button
-                key={item.id}
-                className={`sidebar-btn ${isActive ? 'active' : ''}`}
-                onClick={() => setActiveMenu(item.id)}
-                title={isSidebarCollapsed ? item.id : ''}
-                style={{
-                  ...styles.sidebarBtn,
-                  justifyContent: isSidebarCollapsed ? 'center' : 'flex-start',
-                  padding: isSidebarCollapsed ? '12px 0' : '12px 16px',
-                }}
-              >
-                {React.cloneElement(item.icon, { color: isActive ? '#ffffff' : '#64748b' })}
-                {!isSidebarCollapsed && <span>{item.id}</span>}
-              </button>
-            );
-          })}
-        </div>
-      </aside>
+          <button
+            onClick={() => setIsSidebarCollapsed(prev => !prev)}
+            style={{
+              ...styles.sidebarCollapseBtn,
+              padding: '6px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(0,0,0,0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              cursor: 'pointer',
+              alignSelf: 'flex-start',
+              marginBottom: '16px'
+            }}
+            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            <Menu size={18} color="#64748b" />
+          </button>
+          <div style={styles.sidebarMenu}>
+            {(() => {
+              if (user?.isFirstTime) {
+                return [
+                  { id: 'Change Password', icon: <Settings size={18} /> }
+                ];
+              }
+              if (user?.role === 'admin') {
+                return [
+                  { id: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+                  { id: 'Shifts', icon: <Clock size={18} /> },
+                  { id: 'Attendance History', icon: <Users size={18} /> },
+                  { id: 'Employees', icon: <UserCheck size={18} /> },
+                  { id: 'Leaves', icon: <Calendar size={18} /> },
+                  { id: 'Leave Types', icon: <Layers size={18} /> },
+                  { id: 'Settings', icon: <Settings size={18} /> },
+                  { id: 'Help', icon: <HelpCircle size={18} /> }
+                ];
+              } else if (user?.role === 'manager') {
+                return [
+                  { id: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+                  { id: 'Reports', icon: <FileText size={18} /> },
+                  { id: 'Leaves', icon: <Calendar size={18} /> },
+                  { id: 'Settings', icon: <Settings size={18} /> },
+                  { id: 'Help', icon: <HelpCircle size={18} /> }
+                ];
+              } else if (user?.role === 'reporting manager') {
+                return [
+                  { id: 'Reporting Manager', icon: <BarChart3 size={18} /> },
+                  { id: 'Settings', icon: <Settings size={18} /> },
+                  { id: 'Help', icon: <HelpCircle size={18} /> }
+                ];
+              } else {
+                return [
+                  { id: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+                  { id: 'Attendance', icon: <Clock size={18} /> },
+                  { id: 'Reports', icon: <FileText size={18} /> },
+                  { id: 'Leaves', icon: <Calendar size={18} /> },
+                  { id: 'Master Data', icon: <Layers size={18} /> },
+                  { id: 'Settings', icon: <Settings size={18} /> },
+                  { id: 'Help', icon: <HelpCircle size={18} /> }
+                ];
+              }
+            })()
+              .map(item => {
+                const isActive = activeMenu === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className={`sidebar-btn ${isActive ? 'active' : ''}`}
+                    onClick={() => setActiveMenu(item.id)}
+                    title={isSidebarCollapsed ? item.id : ''}
+                    style={{
+                      ...styles.sidebarBtn,
+                      justifyContent: isSidebarCollapsed ? 'center' : 'flex-start',
+                      padding: isSidebarCollapsed ? '12px 0' : '12px 16px',
+                    }}
+                  >
+                    {React.cloneElement(item.icon, { color: isActive ? '#ffffff' : '#64748b' })}
+                    {!isSidebarCollapsed && <span>{item.id}</span>}
+                  </button>
+                );
+              })}
+          </div>
+        </aside>
 
         {/* MAIN LAYOUT WRAPPER */}
-        <div style={{...styles.mainContainer, overflowY: 'auto', height: 'calc(100vh - 70px)'}}>
-          
+        <div style={{ ...styles.mainContainer, overflowY: 'auto', height: 'calc(100vh - 70px)' }}>
+
           {/* PAGE CONTENT */}
           <main style={styles.contentArea}>
             {activeMenu === 'Dashboard' && (
@@ -3565,8 +3920,8 @@ export const Dashboard = () => {
 
               <div style={styles.modalInputGroup}>
                 <label style={styles.modalLabel}>Requested Shift</label>
-                <select 
-                  value={requestedShiftId} 
+                <select
+                  value={requestedShiftId}
                   onChange={e => setRequestedShiftId(e.target.value)}
                   style={styles.modalSelect}
                   required
@@ -3743,8 +4098,8 @@ export const Dashboard = () => {
 
               {flexyDate && (() => {
                 const targetMonth = flexyDate.substring(0, 7);
-                const countThisMonth = myFlexyRequests.filter(req => 
-                  req.date.startsWith(targetMonth) && 
+                const countThisMonth = myFlexyRequests.filter(req =>
+                  req.date.startsWith(targetMonth) &&
                   (req.status === 'Pending' || req.status === 'Approved')
                 ).length;
                 const dateObj = new Date(flexyDate);
@@ -3810,15 +4165,15 @@ export const Dashboard = () => {
                   required
                 />
               </div>
-              <button 
-                type="submit" 
-                id="submit-flexy-btn" 
-                className="btn-primary" 
+              <button
+                type="submit"
+                id="submit-flexy-btn"
+                className="btn-primary"
                 disabled={(() => {
                   if (!flexyDate) return false;
                   const targetMonth = flexyDate.substring(0, 7);
-                  const countThisMonth = myFlexyRequests.filter(req => 
-                    req.date.startsWith(targetMonth) && 
+                  const countThisMonth = myFlexyRequests.filter(req =>
+                    req.date.startsWith(targetMonth) &&
                     (req.status === 'Pending' || req.status === 'Approved')
                   ).length;
                   return countThisMonth >= 2;
@@ -3829,8 +4184,8 @@ export const Dashboard = () => {
                   opacity: (() => {
                     if (!flexyDate) return 1;
                     const targetMonth = flexyDate.substring(0, 7);
-                    const countThisMonth = myFlexyRequests.filter(req => 
-                      req.date.startsWith(targetMonth) && 
+                    const countThisMonth = myFlexyRequests.filter(req =>
+                      req.date.startsWith(targetMonth) &&
                       (req.status === 'Pending' || req.status === 'Approved')
                     ).length;
                     return countThisMonth >= 2 ? 0.5 : 1;
@@ -3838,8 +4193,8 @@ export const Dashboard = () => {
                   cursor: (() => {
                     if (!flexyDate) return 'pointer';
                     const targetMonth = flexyDate.substring(0, 7);
-                    const countThisMonth = myFlexyRequests.filter(req => 
-                      req.date.startsWith(targetMonth) && 
+                    const countThisMonth = myFlexyRequests.filter(req =>
+                      req.date.startsWith(targetMonth) &&
                       (req.status === 'Pending' || req.status === 'Approved')
                     ).length;
                     return countThisMonth >= 2 ? 'not-allowed' : 'pointer';
